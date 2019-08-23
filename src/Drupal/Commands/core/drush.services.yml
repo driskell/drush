@@ -9,7 +9,7 @@ services:
       -  { name: drush.command }
   drupal.commands:
     class: \Drush\Drupal\Commands\core\DrupalCommands
-    arguments: ['@cron', '@module_handler']
+    arguments: ['@lock', '@cron', '@module_handler']
     tags:
       -  { name: drush.command }
   entity.commands:
