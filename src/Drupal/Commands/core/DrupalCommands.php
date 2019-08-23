@@ -4,6 +4,7 @@ namespace Drush\Drupal\Commands\core;
 use Consolidation\OutputFormatters\StructuredData\RowsOfFields;
 use Drupal\Core\CronInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
+use Drupal\Core\Lock\LockBackendInterface;
 use Drush\Commands\DrushCommands;
 use Drush\Drupal\DrupalUtil;
 use Drush\Utils\StringUtils;
@@ -11,6 +12,11 @@ use Drush\Utils\StringUtils;
 class DrupalCommands extends DrushCommands
 {
 
+    /**
+     * @var \Drupal\Core\Lock\LockBackendInterface $lock
+     */
+    protected $lock;
+    
     /**
      * @var \Drupal\Core\CronInterface
      */
@@ -41,8 +47,9 @@ class DrupalCommands extends DrushCommands
      * @param \Drupal\Core\CronInterface $cron
      * @param ModuleHandlerInterface $moduleHandler
      */
-    public function __construct(CronInterface $cron, ModuleHandlerInterface $moduleHandler)
+    public function __construct(LockBackendInterface $lock, CronInterface $cron, ModuleHandlerInterface $moduleHandler)
     {
+        $this->lock = $lock;
         $this->cron = $cron;
         $this->moduleHandler = $moduleHandler;
     }
@@ -56,6 +63,15 @@ class DrupalCommands extends DrushCommands
      */
     public function cron()
     {
+        // Aquire lock now - so we can detect if already running
+        // The subsequent aquire in Cron will simply renew
+        // This just ensures if cron already running, we do not throw an exception, as that's normal if running from crontab
+        if (!$this->lock->acquire('cron', 900.0)) {
+            // Identical copy of the message we'd see from Cron
+            $this->logger->warning('Attempting to re-run cron while it is already running.');
+            return;
+        }
+        
         $result = $this->getCron()->run();
         if (!$result) {
             throw new \Exception(dt('Cron run failed.'));
